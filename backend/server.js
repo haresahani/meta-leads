@@ -1,15 +1,36 @@
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
 const cors = require("cors");
 const axios = require("axios");
 require("dotenv").config();
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
 const PORT = process.env.PORT || 5000;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "my_meta_verify_token";
+
+const leads = []; //inmemory array of received leads
 
 //Middleware to parse incoming json and enable cors
 app.use(cors());
 app.use(express.json());
+
+//socket.io connection handler
+io.on("connection", (socket) => {
+  console.log(`client connected: ${socket.id}`);
+
+  socket.on("disconnect", () => {
+    console.log(`Client disconnected: ${socket.id}`);
+  });
+});
 
 /**
  * Fetch full lead details (name, email, phone) using Facebook Graph API
@@ -126,10 +147,8 @@ app.post("/webhook", async (req, res) => {
   const body = req.body;
 
   if (body.object === "page") {
-    // Iterate over each entry - there may be multiple if batched
     if (body.entry && Array.isArray(body.entry)) {
       for (const entry of body.entry) {
-        // Iterate over each change in entry
         if (entry.changes && Array.isArray(entry.changes)) {
           for (const change of entry.changes) {
             if (change.field === "leadgen") {
@@ -143,7 +162,20 @@ app.post("/webhook", async (req, res) => {
 
               //fetch lead details using graph api or dev fallback
               const details = await fetchLeadDetails(leadData.leadgen_id);
-              console.log("Lead Details:", details);
+              // console.log("Lead Details:", details);
+              const fullLead = {
+                ...details,
+                form_id: leadData.form_id,
+                page_id: leadData.page_id,
+              };
+
+              //Store in memory
+              leads.unshift(fullLead);
+
+              //broadcast real-time event to connected clients
+              io.emit("new_lead", fullLead);
+
+              console.log("Lead Details:", fullLead);
               console.log("---------------\n");
             }
           }
@@ -156,6 +188,46 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+//fetcch list of all received leads stored in memory
+app.get("/api/leads", (req, res) => {
+  res.json(leads);
+});
+
+//endpoint to manually trigger/simulate a new lead for for testing purposes
+app.post("/api/test-lead", async (req, res) => {
+  try {
+    let newLead;
+    if (req.body && (req.body.name || req.body.email || req.body.phone)) {
+      newLead = {
+        id: req.body.id || `test_${Date.now()}`,
+        name: req.body.name,
+        email: req.body.email,
+        phone: req.body.phone,
+        created_time: req.body.created_time || new Date().toISOString(),
+        form_id: req.body.form_id || "test_form_id",
+        page_id: req.body.page_id || "test_page_id",
+        isMock: true,
+      };
+    } else {
+      const details = await fetchLeadDetails(`test_${Date.now()}`);
+      newLead = {
+        ...details,
+        form_id: "test_form_id",
+        page_id: "test_page_id",
+      };
+    }
+
+    leads.unshift(newLead);
+    io.emit("new_lead", newLead);
+
+    console.log("Test lead created and broadcasted:", newLead);
+    res.status(201).json(newLead);
+  } catch (error) {
+    console.error("Error creating test lead:", error);
+    res.status(500).json({ error: "Failed to create test lead" });
+  }
+});
+
+server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
