@@ -26,6 +26,22 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshBtn: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 6,
+  },
+  refreshBtnText: {
+    color: '#374151',
+    fontWeight: '600',
+    fontSize: 12,
+  },
   testBtn: {
     backgroundColor: '#1877F2',
     paddingHorizontal: 12,
@@ -60,6 +76,9 @@ const styles = StyleSheet.create({
   countBar: {
     paddingHorizontal: 20,
     paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   countText: {
     fontSize: 14,
@@ -84,6 +103,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -122,7 +143,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   detailLabel: {
-    width: 70,
+    width: 75,
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
@@ -147,6 +168,7 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 11,
     color: '#9CA3AF',
+    fontWeight: '500',
   },
   loadingContainer: {
     flex: 1,
@@ -162,6 +184,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 48,
     paddingHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+  },
+  emptyIcon: {
+    fontSize: 40,
+    marginBottom: 12,
   },
   emptyTitle: {
     fontSize: 16,
@@ -173,6 +205,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9CA3AF',
     textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  emptyActionBtn: {
+    backgroundColor: '#1877F2',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  emptyActionBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
 
