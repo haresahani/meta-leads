@@ -98,23 +98,29 @@ async function fetchLeadDetails(leadId) {
 
   // Readable mock lead generator fallback for offline / development testing
   const mockNames = [
-    "Alex Johnson",
-    "Sarah Connor",
-    "Michael Scott",
-    "Emma Watson",
-    "David Miller",
+    'Aarav Sharma',
+    'Priya Patel',
+    'Rohan Verma',
+    'Ananya Gupta',
+    'Vikram Singh',
+    'Neha Reddy',
+    'Aditya Kumar',
+    'Kavya Joshi',
+    'Rajesh Kumar',
+    'Pooja Nair'
   ];
   const randomName = mockNames[Math.floor(Math.random() * mockNames.length)];
-  const sanitizedName = randomName.toLowerCase().replace(/\s+/g, ".");
-  const randomId = Math.floor(1000 + Math.random() * 9000);
+  const sanitizedName = randomName.toLowerCase().replace(/\s+/g, '.');
+  const randomId = Math.floor(100 + Math.random() * 900);
+  const randomMobile = Math.floor(7000000000 + Math.random() * 2999999999);
 
   return {
-    id: leadId || `mock_${Date.now()}`,
+    id: leadId || `lead_${Date.now()}`,
     name: randomName,
-    email: `${sanitizedName}${randomId}@example.com`,
-    phone: `+1 (555) 019-${randomId}`,
+    email: `${sanitizedName}${randomId}@gmail.com`,
+    phone: `+91 ${randomMobile}`,
     created_time: new Date().toISOString(),
-    isMock: true,
+    isMock: true
   };
 }
 
@@ -134,7 +140,7 @@ app.get("/webhook", (req, res) => {
       console.log("Webhook verified successfully by Metal");
       return res.status(200).send(challenge);
     } else {
-      console.error("Webhook verification failed. Token mismatch.");
+      console.error(`Webhook verification failed. Token mismatch. Received token: "${token}", Expected: "${VERIFY_TOKEN}"`);
       return res.sendStatus(403);
     }
   }
