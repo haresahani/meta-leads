@@ -3,18 +3,23 @@ import {
   Text,
   View,
   FlatList,
-  SafeAreaView,
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  StatusBar
+  StatusBar,
+  LogBox
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import io from 'socket.io-client';
 import styles from './styles';
 
-const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || 'http://localhost:5000';
+//disable development warning banners at the bottom of screen for clean UI
+LogBox.ignoreAllLogs(true);
 
-//format timestamp into relative time or localized date string
+// Uses local Wi-Fi IP address (10.196.191.70:5000) or Cloudflare tunnel URL
+const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || 'http://10.196.191.70:5000';
+
+//Format timestamp into relative time or localized date string
 function formatTimestamp(timestampStr) {
   if (!timestampStr) return 'Unknown time';
   const date = new Date(timestampStr);
@@ -57,11 +62,12 @@ export default function App() {
   useEffect(() => {
     fetchLeads();
 
-    // Initialize Socket.IO connection
+    //initialize Socket.IO connection (polling first for bulletproof connection across all mobile networks)
     const socket = io(SERVER_URL, {
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
-      timeout: 10000,
+      transports: ['polling', 'websocket'],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      timeout: 20000,
     });
 
     socket.on('connect', () => {
@@ -180,9 +186,6 @@ export default function App() {
           <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
             <Text style={styles.refreshBtnText}>↻ Refresh</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.testBtn} onPress={triggerTestLead}>
-            <Text style={styles.testBtnText}>+ Test Lead</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -228,9 +231,6 @@ export default function App() {
               <Text style={styles.emptySub}>
                 New Meta leads will appear here automatically via Socket.IO real-time stream.
               </Text>
-              <TouchableOpacity style={styles.emptyActionBtn} onPress={triggerTestLead}>
-                <Text style={styles.emptyActionBtnText}>Create Test Lead</Text>
-              </TouchableOpacity>
             </View>
           }
         />
