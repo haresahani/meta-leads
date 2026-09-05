@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Text,
   View,
@@ -7,17 +7,35 @@ import {
   RefreshControl,
   ActivityIndicator,
   StatusBar,
-  LogBox
+  LogBox,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import io from 'socket.io-client';
+import Constants from 'expo-constants';
 import styles from './styles';
 
-//disable development warning banners at the bottom of screen for clean UI
+// Disable development warning banners at the bottom of screen for clean UI
 LogBox.ignoreAllLogs(true);
 
-// Uses local Wi-Fi IP address (10.196.191.70:5000) or Cloudflare tunnel URL
-const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || 'http://10.196.191.70:5000';
+//Dynamically determine local server URL from Expo host IP or fallback environment variable.
+//Expo automatically knows the host machine's IP running Metro bundler.
+function getInitialServerUrl() {
+  if (process.env.EXPO_PUBLIC_SERVER_URL) {
+    return process.env.EXPO_PUBLIC_SERVER_URL;
+  }
+  const hostUri = Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost || Constants.manifest2?.extra?.expoGo?.debuggerHost;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip) {
+      return `http://${ip}:5000`;
+    }
+  }
+  return 'http://172.16.2.75:5000';
+}
 
 //Format timestamp into relative time or localized date string
 function formatTimestamp(timestampStr) {
@@ -37,41 +55,56 @@ function formatTimestamp(timestampStr) {
 }
 
 export default function App() {
+  const [serverUrl, setServerUrl] = useState(getInitialServerUrl());
+  const [inputUrl, setInputUrl] = useState(getInitialServerUrl());
+  const [modalVisible, setModalVisible] = useState(false);
+
   const [leads, setLeads] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const socketRef = useRef(null);
+
   // Fetch initial leads from backend
-  const fetchLeads = useCallback(async () => {
+  const fetchLeads = useCallback(async (targetUrl = serverUrl) => {
     try {
-      const response = await fetch(`${SERVER_URL}/api/leads`);
+      const response = await fetch(`${targetUrl}/api/leads`);
       if (response.ok) {
         const data = await response.json();
         setLeads(data);
       }
     } catch (error) {
-      console.error('Error fetching leads:', error);
+      console.error('Error fetching leads:', error.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [serverUrl]);
 
   useEffect(() => {
-    fetchLeads();
+    fetchLeads(serverUrl);
 
-    //initialize Socket.IO connection (polling first for bulletproof connection across all mobile networks)
-    const socket = io(SERVER_URL, {
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+
+    setConnectionStatus('Connecting...');
+    setIsConnected(false);
+
+    //Initialize Socket.IO connection to active serverUrl
+    const socket = io(serverUrl, {
       transports: ['polling', 'websocket'],
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       timeout: 20000,
     });
 
+    socketRef.current = socket;
+
     socket.on('connect', () => {
-      console.log('Socket.IO connected to server');
+      console.log(`Socket.IO connected to ${serverUrl}`);
       setIsConnected(true);
       setConnectionStatus('Connected');
     });
@@ -92,7 +125,6 @@ export default function App() {
     socket.on('new_lead', (newLead) => {
       console.log('Real-time new lead received:', newLead);
       setLeads((prevLeads) => {
-        // Prevent duplicate leads by ID
         if (prevLeads.some((lead) => lead.id === newLead.id)) {
           return prevLeads;
         }
@@ -103,23 +135,23 @@ export default function App() {
     return () => {
       socket.disconnect();
     };
-  }, [fetchLeads]);
+  }, [serverUrl, fetchLeads]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchLeads();
+    fetchLeads(serverUrl);
   };
 
-  // Helper to trigger test lead from mobile app
-  const triggerTestLead = async () => {
-    try {
-      await fetch(`${SERVER_URL}/api/test-lead`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch (error) {
-      console.error('Failed to trigger test lead:', error);
+  const saveServerUrl = () => {
+    let cleanUrl = inputUrl.trim();
+    if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = `http://${cleanUrl}`;
     }
+    if (cleanUrl.endsWith('/')) {
+      cleanUrl = cleanUrl.slice(0, -1);
+    }
+    setServerUrl(cleanUrl);
+    setModalVisible(false);
   };
 
   const renderLeadItem = ({ item }) => {
@@ -186,21 +218,37 @@ export default function App() {
           <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
             <Text style={styles.refreshBtnText}>↻ Refresh</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.configBtn}
+            onPress={() => {
+              setInputUrl(serverUrl);
+              setModalVisible(true);
+            }}
+          >
+            <Text style={styles.configBtnText}>⚙️ Server</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       {/* Connection Status Indicator */}
-      <View style={styles.statusContainer}>
+      <TouchableOpacity
+        style={styles.statusContainer}
+        onPress={() => {
+          setInputUrl(serverUrl);
+          setModalVisible(true);
+        }}
+      >
         <View
           style={[
             styles.statusDot,
             { backgroundColor: isConnected ? '#10B981' : '#EF4444' },
           ]}
         />
-        <Text style={styles.statusText}>
-          Status: {connectionStatus} ({SERVER_URL})
+        <Text style={[styles.statusText, { flex: 1 }]} numberOfLines={1}>
+          Status: {connectionStatus} ({serverUrl})
         </Text>
-      </View>
+        <Text style={{ fontSize: 11, color: '#1877F2', fontWeight: '600' }}>Edit</Text>
+      </TouchableOpacity>
 
       {/* Lead Count Bar */}
       <View style={styles.countBar}>
@@ -235,6 +283,48 @@ export default function App() {
           }
         />
       )}
+
+      {/* Server URL Configuration Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Configure Server URL</Text>
+            <Text style={styles.modalSubtitle}>
+              Enter your local Wi-Fi backend URL (e.g. http://172.16.2.75:5000) or your Cloudflare / Ngrok tunnel URL.
+            </Text>
+
+            <Text style={styles.inputLabel}>Backend Server URL:</Text>
+            <TextInput
+              style={styles.textInput}
+              value={inputUrl}
+              onChangeText={setInputUrl}
+              placeholder="http://172.16.2.75:5000"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={saveServerUrl}>
+                <Text style={styles.saveBtnText}>Save & Connect</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
